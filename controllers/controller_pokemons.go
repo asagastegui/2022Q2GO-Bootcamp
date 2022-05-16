@@ -15,8 +15,12 @@ func GetPokemons(w http.ResponseWriter, r *http.Request) {
 	pokemons, err := usecases.ReadCsv("./files/pokemons.csv")
 	if err != nil {
 		fmt.Println("Error: ", err)
+		// TODO: Fix to change to use this approach (as its better to check if encoding/marshalling actually worked)
+		// https://stackoverflow.com/questions/31622052/how-to-serve-up-a-json-response-using-go
 		json.NewEncoder(w).Encode(map[string]string{"error": "There was an error reading the csv file, pls contact the administrator"})
 	}
+	// TODO: Fix to change to use this approach (as its better to check if encoding/marshalling actually worked)
+	// https://stackoverflow.com/questions/31622052/how-to-serve-up-a-json-response-using-go
 	// return all pokemons
 	json.NewEncoder(w).Encode(pokemons)
 }
