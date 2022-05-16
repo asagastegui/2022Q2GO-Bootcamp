@@ -10,7 +10,7 @@ import (
 	"gobootcamp.com/usecases"
 )
 
-// Get all the pokemons (no params required)
+// GetPokemons - Get all the pokemons (no params required)
 func GetPokemons(w http.ResponseWriter, r *http.Request) {
 	pokemons, err := usecases.ReadCsv("./files/pokemons.csv")
 	if err != nil {
@@ -25,8 +25,7 @@ func GetPokemons(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(pokemons)
 }
 
-// Get all pokemons and filter based on the ID of the required pokemon,
-// if id is missing, error 400 will be throwned
+// GetPokemon - Get all pokemons and filter based on the ID of the required pokemon, if id is missing, error 400 will be throwned
 func GetPokemon(w http.ResponseWriter, r *http.Request) {
 	id, IDexists := mux.Vars(r)["id"]
 	if IDexists {

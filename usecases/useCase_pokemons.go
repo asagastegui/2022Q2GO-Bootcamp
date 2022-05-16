@@ -11,8 +11,7 @@ import (
 	"gobootcamp.com/entities"
 )
 
-// Read from a CSV iterates line by line and return a pointer to an array of pokemons
-// error if fails to open the file (path not found or whateva), or if its corrupt
+// ReadCsv - Read from a CSV iterates line by line and return a pointer to an array of pokemons error if fails to open the file (path not found or whateva), or if its corrupt
 func ReadCsv(csvPath string) (*[]entities.Pokemon, error) {
 	file, err := os.Open(csvPath)
 	if err != nil {
@@ -44,6 +43,7 @@ func ReadCsv(csvPath string) (*[]entities.Pokemon, error) {
 	return &pokemons, nil
 }
 
+// FindPoke - Based on ID, iterates thru slice of pokemons and find the correct one, if the ID isnt found, then error is returned
 func FindPoke(pokemons *[]entities.Pokemon, id int) (entities.Pokemon, error) {
 	for _, pokemon := range *pokemons {
 		if pokemon.ID == id {
