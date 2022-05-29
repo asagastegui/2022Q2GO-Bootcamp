@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"gobootcamp.com/controllers"
+	controllers "gobootcamp.com/controller"
 )
 
 func main() {
@@ -14,6 +14,7 @@ func main() {
 
 	router.Path("/pokemons").HandlerFunc(controllers.GetPokemons).Methods("GET")
 	router.Path("/pokemons/{id:[0-9]+}").HandlerFunc(controllers.GetPokemon).Methods("GET")
+	router.Path("/api/pokemons").HandlerFunc(controllers.GetAPIPokemon).Methods("GET")
 
 	fmt.Println("Server at 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
