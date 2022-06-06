@@ -55,19 +55,7 @@ func FindPoke(pokemons *[]entities.Pokemon, id int) (entities.Pokemon, error) {
 	return entities.Pokemon{}, errors.New("the pokemon you are looking for doesnt exists")
 }
 
-type pokeInfo struct {
-	Name string `json:"name"`
-	Url  string `json:"url"`
-}
-
-type pokeAPIResp struct {
-	Count    int        `json:"count"`
-	Next     string     `json:"next"`
-	Previous string     `json:"previous"`
-	Results  []pokeInfo `json:"results"`
-}
-
-func createPokemonFile(pokes []pokeInfo, fileName string) error {
+func createPokemonFile(pokes []entities.PokeInfo, fileName string) error {
 	pathFile := fmt.Sprint("./files/", fileName)
 	csvFile, err := os.Create(pathFile)
 	if err != nil {
@@ -107,7 +95,7 @@ func GetPokesFromAPI() (map[string]bool, error) {
 	}
 
 	defer resp.Body.Close()
-	var jsonResp pokeAPIResp
+	var jsonResp entities.PokeAPIResp
 	// Decoding the response to the struct
 	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
 		fmt.Println("Error decoding the body ", err)

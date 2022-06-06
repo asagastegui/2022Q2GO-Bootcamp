@@ -1,4 +1,4 @@
-package controllers
+package controller
 
 import (
 	"encoding/json"
@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 	usecases "gobootcamp.com/usecase"
+
+	"github.com/gorilla/mux"
 )
 
 func handleError(w http.ResponseWriter, errorStatus int, errorMsg string) {

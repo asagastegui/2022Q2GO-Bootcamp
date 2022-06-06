@@ -5,17 +5,14 @@ import (
 	"log"
 	"net/http"
 
+	"gobootcamp.com/controller"
+
 	"github.com/gorilla/mux"
-	controllers "gobootcamp.com/controller"
 )
 
 func main() {
 	router := mux.NewRouter()
-
-	router.Path("/pokemons").HandlerFunc(controllers.GetPokemons).Methods("GET")
-	router.Path("/pokemons/{id:[0-9]+}").HandlerFunc(controllers.GetPokemon).Methods("GET")
-	router.Path("/api/pokemons").HandlerFunc(controllers.GetAPIPokemon).Methods("GET")
-
+	controller.InitRouter(router)
 	fmt.Println("Server at 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
