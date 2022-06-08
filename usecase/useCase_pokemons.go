@@ -1,49 +1,14 @@
 package usecases
 
 import (
-	"encoding/csv"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strconv"
+	"log"
+	"sync"
 
 	entities "gobootcamp.com/entity"
 )
-
-// ReadCsv - Read from a CSV iterates line by line and return a pointer to an array of pokemons error if fails to open the file (path not found or whateva), or if its corrupt
-func ReadCsv(csvPath string) (*[]entities.Pokemon, error) {
-	file, err := os.Open(csvPath)
-	if err != nil {
-		return nil, err
-	}
-	// closing the file at the end of readCsv
-	defer file.Close()
-	csvReader := csv.NewReader(file)
-
-	var pokemons []entities.Pokemon
-	for {
-		line, err := csvReader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		// Getting ID and Name
-		id, err := strconv.Atoi(line[0])
-		if err != nil {
-			fmt.Println("Unknown ID - ", line)
-			continue
-		}
-		name := line[1]
-		pokemons = append(pokemons, entities.Pokemon{ID: id, Name: name})
-	}
-	return &pokemons, nil
-}
 
 // FindPoke - Based on ID, iterates thru slice of pokemons and find the correct one, if the ID isnt found, then error is returned
 func FindPoke(pokemons *[]entities.Pokemon, id int) (entities.Pokemon, error) {
@@ -55,58 +20,116 @@ func FindPoke(pokemons *[]entities.Pokemon, id int) (entities.Pokemon, error) {
 	return entities.Pokemon{}, errors.New("the pokemon you are looking for doesnt exists")
 }
 
-func createPokemonFile(pokes []entities.PokeInfo, fileName string) error {
-	pathFile := fmt.Sprint("./files/", fileName)
-	csvFile, err := os.Create(pathFile)
-	if err != nil {
-		fmt.Println("Error creating the file:", pathFile, err)
-		return err
-	}
-
-	csvwriter := csv.NewWriter(csvFile)
-
-	err = csvwriter.Write([]string{"id", "name"})
-	if err != nil {
-		fmt.Println("Error inserting the headers of the file:", err)
-		return err
-	}
-	for indx, poke := range pokes {
-		err = csvwriter.Write([]string{fmt.Sprint(indx + 1), poke.Name})
-		if err != nil {
-			fmt.Printf("Error inserting the pokemon %s (ID: %d) \n", poke.Name, indx+1)
-		}
-	}
-	csvwriter.Flush()
-	csvFile.Close()
-	return nil
+type RepositoryPokemons interface {
+	ReadCsvConcurrent(string, chan entities.Pokemon, context.CancelFunc)
+	ReadCsv(string) (*[]entities.Pokemon, error)
+	ReadAPIPokemon() (entities.PokeAPIResp, error)
+	CreatePokemonFile([]entities.PokeInfo, string) error
 }
 
 // Consume the poke API and saves the result into a CSV file https://pokeapi.co/api/v2/pokemon/?offset=0&limit=151
-func GetPokesFromAPI() (map[string]bool, error) {
-	resp, err := http.Get("https://pokeapi.co/api/v2/pokemon/?offset=0&limit=151")
+func GetPokesFromAPI(repo RepositoryPokemons) (map[string]bool, error) {
+	jsonResp, err := repo.ReadAPIPokemon()
 	if err != nil {
-		fmt.Println("Error consuming the API: ", err)
-		return map[string]bool{"saved": false}, err
-	}
-
-	if resp.StatusCode != 200 {
-		fmt.Println("Error code: ", resp.StatusCode, "\nError: ", resp.Status)
-		return map[string]bool{"saved": false}, nil
-	}
-
-	defer resp.Body.Close()
-	var jsonResp entities.PokeAPIResp
-	// Decoding the response to the struct
-	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
-		fmt.Println("Error decoding the body ", err)
+		fmt.Println("Error getting pokemosn from api:", err)
 		return map[string]bool{"saved": false}, err
 	}
 	// Creating the csv file
-	err = createPokemonFile(jsonResp.Results, "pokemons.csv")
+	err = repo.CreatePokemonFile(jsonResp.Results, "pokemons.csv")
 	if err != nil {
 		fmt.Println("Error creating the csv file:", err)
 		return map[string]bool{"saved": false}, err
 	}
 
 	return map[string]bool{"saved": true}, nil
+}
+
+func createWorkers(ctx context.Context, wg *sync.WaitGroup, numberOfWorkers, itemsPerWorker int, dst chan<- entities.Pokemon, src <-chan entities.Pokemon, regType string) {
+	// declare the workers
+	for i := 0; i < numberOfWorkers; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			worker(ctx, dst, src, regType, id, itemsPerWorker)
+		}(i + 1)
+	}
+}
+
+func worker(ctx context.Context, dst chan<- entities.Pokemon, src <-chan entities.Pokemon, regType string, workerID, itemsPerWorker int) {
+	counter := 0
+	for {
+		select {
+		case poke, ok := <-src: // you must check for readable state of the channel.
+			if !ok {
+				log.Println("worker ", workerID, "no more tasks in src (chan closed)")
+				return
+			}
+			// If looking for evens
+			// log.Println("worker", workerID, "counter", counter, "pokemon", poke.Name)
+			if regType == "even" {
+				if poke.ID%2 == 0 {
+					dst <- poke // do somethingg useful.
+					counter++
+				}
+			} else if regType == "odd" {
+				// If looking for odds
+				if poke.ID%2 != 0 {
+					dst <- poke // do somethingg useful.
+					counter++
+				}
+			}
+			if counter == itemsPerWorker {
+				// log.Println("Worker", workerID, " - Max task limit reached - shuting down..")
+				return
+			}
+
+		case <-ctx.Done(): // if the context is cancelled, quit.
+			log.Println("worker ", workerID, "closed by ctx done")
+			return
+		}
+	}
+}
+
+func GetPokesFromCsvConcurrent(itemsPerWorker, numItems int, regType string, repo RepositoryPokemons) ([]entities.Pokemon, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	numberOfWorkers := 10
+	fileName := "./files/pokemons.csv"
+	src := make(chan entities.Pokemon)
+	dst := make(chan entities.Pokemon)
+
+	// Creating the workers
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		createWorkers(ctx, &wg, numberOfWorkers, itemsPerWorker, dst, src, regType)
+		wg.Done()
+	}()
+	wg.Add(1)
+	// Reading the CSV concurrently (sending src channel so he can send the pokemons read)
+	go func() {
+		repo.ReadCsvConcurrent(fileName, src, cancel)
+		wg.Done()
+	}()
+	go func() {
+		wg.Wait()
+
+		close(dst)
+	}()
+	// drain the output
+
+	itemsProcessed := 0
+	var pokes []entities.Pokemon
+	for poke := range dst {
+		fmt.Println(poke.ID, poke.Name)
+		pokes = append(pokes, poke)
+		itemsProcessed++
+		if itemsProcessed == numItems {
+			// log.Println("All items processed")
+			cancel()
+			break
+			// return all pokemons
+		}
+	}
+	return pokes, nil
 }

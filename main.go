@@ -5,14 +5,14 @@ import (
 	"log"
 	"net/http"
 
-	"gobootcamp.com/controller"
+	"gobootcamp.com/infrastructure"
 
 	"github.com/gorilla/mux"
 )
 
 func main() {
 	router := mux.NewRouter()
-	controller.InitRouter(router)
+	infrastructure.InitRouter(router)
 	fmt.Println("Server at 8000")
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
